@@ -67,8 +67,13 @@ df = load_data(conn)
 st.subheader("Select Products")
 selected_products = st.multiselect("Choose products to add", df["item_name"].tolist())
 
+selected_quantities = {}
 if selected_products:
+    for product in selected_products:
+        selected_quantities[product] = st.number_input(f"Quantity for {product}", min_value=1, value=1, step=1)
+    
     selected_df = df[df["item_name"].isin(selected_products)]
+    selected_df["quantity"] = selected_df["item_name"].map(selected_quantities)
     st.write(selected_df)
 
 st.button("Commit Selection")
