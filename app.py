@@ -15,7 +15,7 @@ st.set_page_config(
 # Load the product data from data.csv
 @st.cache_data
 def load_product_data():
-    product_data = pd.read_csv("data.csv")
+    product_data = pd.read_csv("DB Allgen Trading - Data.csv")
     product_data = product_data[['Product Name', 'Price', 'Product Category']].dropna()
     return product_data
 
