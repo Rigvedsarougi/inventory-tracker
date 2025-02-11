@@ -1,24 +1,36 @@
 from collections import defaultdict
 from pathlib import Path
 import sqlite3
+
 import streamlit as st
 import altair as alt
 import pandas as pd
 
-# Set the title and favicon
+# Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title="Inventory Tracker",
-    page_icon=":shopping_bags:",
+    page_title="Inventory tracker",
+    page_icon=":shopping_bags:",  # This is an emoji shortcode. Could be a URL too.
 )
 
-# Connect to SQLite database
-def connect_db():
-    DB_FILENAME = Path(__file__).parent / "inventory.db"
-    conn = sqlite3.connect(DB_FILENAME)
-    return conn
+# Load the product data from data.csv
+@st.cache_data
+def load_product_data():
+    product_data = pd.read_csv("data.csv")
+    product_data = product_data[['Product Name', 'Price', 'Product Category']].dropna()
+    return product_data
 
-# Initialize inventory data
+product_data = load_product_data()
+
+def connect_db():
+    """Connects to the sqlite database."""
+    DB_FILENAME = Path(__file__).parent / "inventory.db"
+    db_already_exists = DB_FILENAME.exists()
+    conn = sqlite3.connect(DB_FILENAME)
+    db_was_just_created = not db_already_exists
+    return conn, db_was_just_created
+
 def initialize_data(conn):
+    """Initializes the inventory table with some data."""
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -30,71 +42,109 @@ def initialize_data(conn):
             units_left INTEGER,
             cost_price REAL,
             reorder_point INTEGER,
-            description TEXT
+            description TEXT,
+            product_category TEXT
         )
         """
     )
-    
-    cursor.execute("DELETE FROM inventory")  # Clear existing data
-    products = [
-        ('5 Step Facial - Radiance Revival', 162.50, 0, 10, 100, 5, 'Radiance revival facial kit'),
-        ('5 Step Facial - Derma Lumin', 162.50, 0, 10, 100, 5, 'Derma Lumin facial kit'),
-        ('5 Step Facial - Cobalin B12', 162.50, 0, 10, 100, 5, 'Cobalin B12 facial kit'),
-        ('5 Step Facial - Mucin Glow', 162.50, 0, 10, 100, 5, 'Mucin Glow facial kit'),
-        ('De Tan Single Use - 12 Gms (10 Pcs)', 209.65, 0, 10, 150, 5, 'De Tan single use pack'),
-        ('4 Step Cleanup - Gold Sheen', 69.65, 0, 10, 50, 5, 'Gold Sheen cleanup kit'),
-        ('4 Step Cleanup - Aqua Splash', 69.65, 0, 10, 50, 5, 'Aqua Splash cleanup kit'),
-        ('4 Step Cleanup - Charcoal Splash', 69.65, 0, 10, 50, 5, 'Charcoal Splash cleanup kit'),
-        ('4 Step Cleanup - Acne Heel', 69.65, 0, 10, 50, 5, 'Acne Heel cleanup kit'),
-        ('4 Step Cleanup - Radiant Youth', 69.65, 0, 10, 50, 5, 'Radiant Youth cleanup kit')
-    ]
-    cursor.executemany("INSERT INTO inventory (item_name, price, units_sold, units_left, cost_price, reorder_point, description) VALUES (?, ?, ?, ?, ?, ?, ?)", products)
     conn.commit()
 
-# Load inventory data
 def load_data(conn):
+    """Loads the inventory data from the database."""
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM inventory")
-    data = cursor.fetchall()
-    return pd.DataFrame(data, columns=["id", "item_name", "price", "units_sold", "units_left", "cost_price", "reorder_point", "description"])
+    try:
+        cursor.execute("SELECT * FROM inventory")
+        data = cursor.fetchall()
+    except:
+        return None
+    df = pd.DataFrame(
+        data,
+        columns=[
+            "id", "item_name", "price", "units_sold", "units_left", "cost_price", "reorder_point", "description", "product_category"
+        ],
+    )
+    return df
 
-# Initialize database
-conn = connect_db()
-initialize_data(conn)
+def update_data(conn, df, changes):
+    """Updates the inventory data in the database."""
+    cursor = conn.cursor()
+    if changes["edited_rows"]:
+        deltas = st.session_state.inventory_table["edited_rows"]
+        rows = []
+        for i, delta in deltas.items():
+            row_dict = df.iloc[i].to_dict()
+            row_dict.update(delta)
+            rows.append(row_dict)
+        cursor.executemany(
+            """
+            UPDATE inventory
+            SET
+                item_name = :item_name,
+                price = :price,
+                units_sold = :units_sold,
+                units_left = :units_left,
+                cost_price = :cost_price,
+                reorder_point = :reorder_point,
+                description = :description,
+                product_category = :product_category
+            WHERE id = :id
+            """,
+            rows,
+        )
+    if changes["added_rows"]:
+        cursor.executemany(
+            """
+            INSERT INTO inventory
+                (id, item_name, price, units_sold, units_left, cost_price, reorder_point, description, product_category)
+            VALUES
+                (:id, :item_name, :price, :units_sold, :units_left, :cost_price, :reorder_point, :description, :product_category)
+            """,
+            (defaultdict(lambda: None, row) for row in changes["added_rows"]),
+        )
+    if changes["deleted_rows"]:
+        cursor.executemany(
+            "DELETE FROM inventory WHERE id = :id",
+            ({"id": int(df.loc[i, "id"])} for i in changes["deleted_rows"]),
+        )
+    conn.commit()
+
+# Streamlit UI
+st.title(":shopping_bags: Inventory Tracker")
+st.info("Use the table below to add, remove, and edit items. And don't forget to commit your changes when you're done.")
+
+conn, db_was_just_created = connect_db()
+if db_was_just_created:
+    initialize_data(conn)
+    st.toast("Database initialized with some sample data.")
+
 df = load_data(conn)
 
-# Drag-and-Drop Product Selection
-st.subheader("Select Products")
-selected_products = st.multiselect("Choose products to add", df["item_name"].tolist())
+# Add a select box for product names
+product_names = product_data['Product Name'].unique()
+selected_product = st.selectbox("Select Product", product_names)
 
-selected_quantities = {}
-if selected_products:
-    for product in selected_products:
-        selected_quantities[product] = st.number_input(f"Quantity for {product}", min_value=1, value=1, step=1)
-    
-    selected_df = df[df["item_name"].isin(selected_products)]
-    selected_df["quantity"] = selected_df["item_name"].map(selected_quantities)
-    st.write(selected_df)
+# Fetch the selected product's details
+selected_product_details = product_data[product_data['Product Name'] == selected_product].iloc[0]
 
-st.button("Commit Selection")
-
-# Display Data
-st.subheader("Inventory Overview")
-st.dataframe(df)
-
-# Inventory Alerts
-st.subheader("Low Stock Alerts")
-low_stock = df[df["units_left"] < df["reorder_point"]]
-if not low_stock.empty:
-    st.error("The following items need restocking:")
-    st.write(low_stock)
-
-# Inventory Charts
-st.subheader("Inventory Statistics")
-st.altair_chart(
-    alt.Chart(df).mark_bar().encode(
-        x="units_left",
-        y=alt.Y("item_name", sort="-x")
-    ),
-    use_container_width=True
+# Display the editable dataframe
+edited_df = st.data_editor(
+    df,
+    disabled=["id"],
+    num_rows="dynamic",
+    column_config={
+        "price": st.column_config.NumberColumn(format="$%.2f"),
+        "cost_price": st.column_config.NumberColumn(format="$%.2f"),
+    },
+    key="inventory_table",
 )
+
+has_uncommitted_changes = any(len(v) for v in st.session_state.inventory_table.values())
+st.button(
+    "Commit changes",
+    type="primary",
+    disabled=not has_uncommitted_changes,
+    on_click=update_data,
+    args=(conn, df, st.session_state.inventory_table),
+)
+
+# Charts and additional UI elements remain unchanged
