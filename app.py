@@ -1,150 +1,123 @@
-from collections import defaultdict
-from pathlib import Path
-import sqlite3
-
 import streamlit as st
-import altair as alt
 import pandas as pd
+from pathlib import Path
 
-# Set the title and favicon that appear in the Browser's tab bar.
+# Set the title and favicon
 st.set_page_config(
-    page_title="Inventory tracker",
-    page_icon=":shopping_bags:",  # This is an emoji shortcode. Could be a URL too.
+    page_title="Inventory Tracker",
+    page_icon=":shopping_bags:",
 )
 
-# Load the product data from data.csv
+# Load product data from data.csv
 @st.cache_data
 def load_product_data():
-    product_data = pd.read_csv("DB Allgen Trading - Data.csv")
-    product_data = product_data[['Product Name', 'Price', 'Product Category']].dropna()
-    return product_data
-
-product_data = load_product_data()
-
-def connect_db():
-    """Connects to the sqlite database."""
-    DB_FILENAME = Path(__file__).parent / "inventory.db"
-    db_already_exists = DB_FILENAME.exists()
-    conn = sqlite3.connect(DB_FILENAME)
-    db_was_just_created = not db_already_exists
-    return conn, db_was_just_created
-
-def initialize_data(conn):
-    """Initializes the inventory table with some data."""
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS inventory (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_name TEXT,
-            price REAL,
-            units_sold INTEGER,
-            units_left INTEGER,
-            cost_price REAL,
-            reorder_point INTEGER,
-            description TEXT,
-            product_category TEXT
-        )
-        """
-    )
-    conn.commit()
-
-def load_data(conn):
-    """Loads the inventory data from the database."""
-    cursor = conn.cursor()
     try:
-        cursor.execute("SELECT * FROM inventory")
-        data = cursor.fetchall()
-    except:
-        return None
-    df = pd.DataFrame(
-        data,
-        columns=[
-            "id", "item_name", "price", "units_sold", "units_left", "cost_price", "reorder_point", "description", "product_category"
-        ],
+        product_data = pd.read_csv("data.csv")
+        # Clean up the data: Drop rows with missing Product Name, Price, or Category
+        product_data = product_data.dropna(subset=["Product Name", "Price", "Product Category"])
+        return product_data
+    except FileNotFoundError:
+        st.error("File 'data.csv' not found. Please ensure the file exists in the same directory as this app.")
+        st.stop()
+
+# Load inventory data (if it exists)
+def load_inventory_data():
+    inventory_file = Path("inventory.csv")
+    if inventory_file.exists():
+        return pd.read_csv(inventory_file)
+    else:
+        # Create a new inventory DataFrame with required columns
+        return pd.DataFrame(columns=[
+            "Product Name", "Product Category", "Price", "Units Sold", "Units Left", "Reorder Point", "Description"
+        ])
+
+# Save inventory data to CSV
+def save_inventory_data(inventory_df):
+    inventory_df.to_csv("inventory.csv", index=False)
+
+# Main app
+def main():
+    st.title(":shopping_bags: Inventory Tracker")
+    st.info("Welcome to the Inventory Management System! Use the table below to manage your inventory.")
+
+    # Load product and inventory data
+    product_data = load_product_data()
+    inventory_df = load_inventory_data()
+
+    # Sidebar for adding new products
+    with st.sidebar:
+        st.subheader("Add New Product")
+        selected_product = st.selectbox(
+            "Select Product",
+            product_data["Product Name"].unique(),
+            index=None,
+            placeholder="Choose a product...",
+        )
+        if selected_product:
+            # Fetch product details from data.csv
+            product_details = product_data[product_data["Product Name"] == selected_product].iloc[0]
+            st.write(f"**Price:** ${product_details['Price']:.2f}")
+            st.write(f"**Category:** {product_details['Product Category']}")
+
+            # Input fields for inventory details
+            units_left = st.number_input("Units Left", min_value=0, value=0)
+            units_sold = st.number_input("Units Sold", min_value=0, value=0)
+            reorder_point = st.number_input("Reorder Point", min_value=0, value=5)
+            description = st.text_input("Description", value=product_details.get("Description", ""))
+
+            # Add to inventory
+            if st.button("Add to Inventory"):
+                new_row = {
+                    "Product Name": selected_product,
+                    "Product Category": product_details["Product Category"],
+                    "Price": product_details["Price"],
+                    "Units Sold": units_sold,
+                    "Units Left": units_left,
+                    "Reorder Point": reorder_point,
+                    "Description": description,
+                }
+                inventory_df = pd.concat([inventory_df, pd.DataFrame([new_row])], ignore_index=True)
+                save_inventory_data(inventory_df)
+                st.success(f"Added {selected_product} to inventory!")
+
+    # Display inventory table
+    st.subheader("Inventory Table")
+    edited_df = st.data_editor(
+        inventory_df,
+        num_rows="dynamic",
+        column_config={
+            "Price": st.column_config.NumberColumn(format="$%.2f"),
+            "Reorder Point": st.column_config.NumberColumn(help="Minimum stock level before reordering."),
+        },
+        key="inventory_editor",
     )
-    return df
 
-def update_data(conn, df, changes):
-    """Updates the inventory data in the database."""
-    cursor = conn.cursor()
-    if changes["edited_rows"]:
-        deltas = st.session_state.inventory_table["edited_rows"]
-        rows = []
-        for i, delta in deltas.items():
-            row_dict = df.iloc[i].to_dict()
-            row_dict.update(delta)
-            rows.append(row_dict)
-        cursor.executemany(
-            """
-            UPDATE inventory
-            SET
-                item_name = :item_name,
-                price = :price,
-                units_sold = :units_sold,
-                units_left = :units_left,
-                cost_price = :cost_price,
-                reorder_point = :reorder_point,
-                description = :description,
-                product_category = :product_category
-            WHERE id = :id
-            """,
-            rows,
-        )
-    if changes["added_rows"]:
-        cursor.executemany(
-            """
-            INSERT INTO inventory
-                (id, item_name, price, units_sold, units_left, cost_price, reorder_point, description, product_category)
-            VALUES
-                (:id, :item_name, :price, :units_sold, :units_left, :cost_price, :reorder_point, :description, :product_category)
-            """,
-            (defaultdict(lambda: None, row) for row in changes["added_rows"]),
-        )
-    if changes["deleted_rows"]:
-        cursor.executemany(
-            "DELETE FROM inventory WHERE id = :id",
-            ({"id": int(df.loc[i, "id"])} for i in changes["deleted_rows"]),
-        )
-    conn.commit()
+    # Save changes to inventory
+    if st.button("Save Changes"):
+        save_inventory_data(edited_df)
+        st.success("Inventory updated successfully!")
 
-# Streamlit UI
-st.title(":shopping_bags: Inventory Tracker")
-st.info("Use the table below to add, remove, and edit items. And don't forget to commit your changes when you're done.")
+    # Display low stock alerts
+    st.subheader("Low Stock Alerts")
+    low_stock = edited_df[edited_df["Units Left"] < edited_df["Reorder Point"]]
+    if not low_stock.empty:
+        st.warning("The following products are below their reorder point:")
+        st.dataframe(low_stock[["Product Name", "Units Left", "Reorder Point"]])
+    else:
+        st.success("All products are well-stocked!")
 
-conn, db_was_just_created = connect_db()
-if db_was_just_created:
-    initialize_data(conn)
-    st.toast("Database initialized with some sample data.")
+    # Visualizations
+    st.subheader("Inventory Insights")
+    col1, col2 = st.columns(2)
 
-df = load_data(conn)
+    with col1:
+        st.write("**Units Left by Product**")
+        st.bar_chart(edited_df.set_index("Product Name")["Units Left"])
 
-# Add a select box for product names
-product_names = product_data['Product Name'].unique()
-selected_product = st.selectbox("Select Product", product_names)
+    with col2:
+        st.write("**Units Sold by Product**")
+        st.bar_chart(edited_df.set_index("Product Name")["Units Sold"])
 
-# Fetch the selected product's details
-selected_product_details = product_data[product_data['Product Name'] == selected_product].iloc[0]
-
-# Display the editable dataframe
-edited_df = st.data_editor(
-    df,
-    disabled=["id"],
-    num_rows="dynamic",
-    column_config={
-        "price": st.column_config.NumberColumn(format="$%.2f"),
-        "cost_price": st.column_config.NumberColumn(format="$%.2f"),
-    },
-    key="inventory_table",
-)
-
-has_uncommitted_changes = any(len(v) for v in st.session_state.inventory_table.values())
-st.button(
-    "Commit changes",
-    type="primary",
-    disabled=not has_uncommitted_changes,
-    on_click=update_data,
-    args=(conn, df, st.session_state.inventory_table),
-)
-
-# Charts and additional UI elements remain unchanged
+# Run the app
+if __name__ == "__main__":
+    main()
