@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
-from pathlib import Path
 from datetime import datetime
 
 # Set the title and favicon
 st.set_page_config(
-    page_title="Inventory Tracker",
+    page_title="Sales Tracker",
     page_icon=":shopping_bags:",
 )
 
@@ -21,122 +20,133 @@ def load_product_data():
         st.error("File 'data.csv' not found. Please ensure the file exists in the same directory as this app.")
         st.stop()
 
-# Load inventory data (if it exists)
-def load_inventory_data():
-    inventory_file = Path("inventory.csv")
-    if inventory_file.exists():
-        return pd.read_csv(inventory_file)
+# Load sales data (if it exists)
+def load_sales_data():
+    sales_file = Path("sales.csv")
+    if sales_file.exists():
+        return pd.read_csv(sales_file)
     else:
-        # Create a new inventory DataFrame with required columns
+        # Create a new sales DataFrame with required columns
         return pd.DataFrame(columns=[
-            "Date", "Party Name", "Order ID", "Address", "City", "State", "Contact", 
-            "Product Name", "Product Category", "Price", "Units Sold", "Description"
+            "Date", "Party Name", "Order ID", "Address", "City", "State", "Contact",
+            "Product Name", "Product Category", "Price", "Quantity Sold", "Total Sales"
         ])
 
-# Save inventory data to CSV
-def save_inventory_data(inventory_df):
-    inventory_df.to_csv("inventory.csv", index=False)
+# Save sales data to CSV
+def save_sales_data(sales_df):
+    sales_df.to_csv("sales.csv", index=False)
 
 # Main app
 def main():
-    st.title(":shopping_bags: Inventory Tracker")
-    st.info("Welcome to the Inventory Management System! Use the table below to manage your inventory.")
+    st.title(":shopping_bags: Sales Tracker")
+    st.info("Welcome to the Sales Management System! Use the form below to record sales.")
 
-    # Load product and inventory data
+    # Load product and sales data
     product_data = load_product_data()
-    inventory_df = load_inventory_data()
+    sales_df = load_sales_data()
 
-    # Sidebar for adding new orders
+    # Sidebar for adding new sales
     with st.sidebar:
-        st.subheader("Add New Order")
+        st.subheader("Add New Sale")
+        # Input fields for party details
+        party_name = st.text_input("Party Name")
+        order_id = st.text_input("Order ID")
+        address = st.text_input("Address")
+        city = st.text_input("City")
+        state = st.text_input("State")
+        contact = st.text_input("Contact")
+        sale_date = st.date_input("Date", value=datetime.today())
+
+        # Multi-select for products
         selected_products = st.multiselect(
             "Select Products",
             product_data["Product Name"].unique(),
             placeholder="Choose products...",
         )
-        
+
+        # Display selected products and input quantities
+        product_quantities = {}
         if selected_products:
-            # Input fields for order details
-            party_name = st.text_input("Party Name")
-            order_id = st.text_input("Order ID")
-            address = st.text_input("Address")
-            city = st.text_input("City")
-            state = st.text_input("State")
-            contact = st.text_input("Contact")
-            description = st.text_input("Description")
-
-            # Input fields for units sold
-            units_sold = {}
+            st.write("**Selected Products**")
             for product in selected_products:
-                units_sold[product] = st.number_input(f"Units Sold for {product}", min_value=0, value=0)
+                product_details = product_data[product_data["Product Name"] == product].iloc[0]
+                quantity = st.number_input(
+                    f"Quantity Sold for {product}",
+                    min_value=1,
+                    value=1,
+                    key=product,
+                )
+                product_quantities[product] = {
+                    "Product Name": product,
+                    "Product Category": product_details["Product Category"],
+                    "Price": product_details["Price"],
+                    "Quantity Sold": quantity,
+                    "Total Sales": product_details["Price"] * quantity,
+                }
 
-            # Add to inventory
-            if st.button("Add Order"):
-                for product in selected_products:
-                    product_details = product_data[product_data["Product Name"] == product].iloc[0]
+        # Add to sales
+        if st.button("Record Sale"):
+            if not selected_products:
+                st.error("Please select at least one product.")
+            else:
+                for product, details in product_quantities.items():
                     new_row = {
-                        "Date": datetime.now().strftime("%Y-%m-%d"),
+                        "Date": sale_date,
                         "Party Name": party_name,
                         "Order ID": order_id,
                         "Address": address,
                         "City": city,
                         "State": state,
                         "Contact": contact,
-                        "Product Name": product,
-                        "Product Category": product_details["Product Category"],
-                        "Price": product_details["Price"],
-                        "Units Sold": units_sold[product],
-                        "Description": description,
+                        **details,
                     }
-                    inventory_df = pd.concat([inventory_df, pd.DataFrame([new_row])], ignore_index=True)
-                save_inventory_data(inventory_df)
-                st.success(f"Added order for {', '.join(selected_products)} to inventory!")
+                    sales_df = pd.concat([sales_df, pd.DataFrame([new_row])], ignore_index=True)
+                save_sales_data(sales_df)
+                st.success("Sale recorded successfully!")
 
-    # Display inventory table
-    st.subheader("Inventory Table")
-    edited_df = st.data_editor(
-        inventory_df,
-        num_rows="dynamic",
-        column_config={
-            "Price": st.column_config.NumberColumn(format="$%.2f"),
-        },
-        key="inventory_editor",
-    )
-
-    # Save changes to inventory
-    if st.button("Save Changes"):
-        save_inventory_data(edited_df)
-        st.success("Inventory updated successfully!")
+    # Display sales table
+    st.subheader("Sales Records")
+    st.dataframe(sales_df)
 
     # Visualizations
-    st.subheader("Inventory Insights")
+    st.subheader("Sales Insights")
 
     # Top Selling Products
-    st.write("**Top Selling Products**")
-    top_selling_products = edited_df.groupby("Product Name").agg({
-        "Units Sold": "sum",
-        "Price": "first"
-    }).reset_index()
-    top_selling_products["Total Sales Value"] = top_selling_products["Units Sold"] * top_selling_products["Price"]
-    top_selling_products = top_selling_products.sort_values(by="Units Sold", ascending=False)
-    st.dataframe(top_selling_products)
+    st.write("**Top Selling Products (by Quantity)**")
+    top_products_quantity = (
+        sales_df.groupby("Product Name")["Quantity Sold"]
+        .sum()
+        .sort_values(ascending=False)
+        .reset_index()
+    )
+    st.bar_chart(top_products_quantity.set_index("Product Name"))
 
-    # Bar chart for top selling products
-    st.bar_chart(top_selling_products.set_index("Product Name")["Units Sold"])
+    st.write("**Top Selling Products (by Sales Value)**")
+    top_products_sales = (
+        sales_df.groupby("Product Name")["Total Sales"]
+        .sum()
+        .sort_values(ascending=False)
+        .reset_index()
+    )
+    st.bar_chart(top_products_sales.set_index("Product Name"))
 
     # Top Categories
-    st.write("**Top Categories by Units Sold**")
-    top_categories = edited_df.groupby("Product Category")["Units Sold"].sum().reset_index()
-    top_categories = top_categories.sort_values(by="Units Sold", ascending=False)
-    st.dataframe(top_categories)
-
-    # Pie chart for top categories
-    st.write("**Category Distribution**")
-    st.pyplot(top_categories.plot.pie(y="Units Sold", labels=top_categories["Product Category"], autopct="%1.1f%%", legend=False))
+    st.write("**Top Categories (by Sales Value)**")
+    top_categories = (
+        sales_df.groupby("Product Category")["Total Sales"]
+        .sum()
+        .sort_values(ascending=False)
+        .reset_index()
+    )
+    st.bar_chart(top_categories.set_index("Product Category"))
 
     # Sales Over Time
     st.write("**Sales Over Time**")
-    sales_over_time = edited_df.groupby("Date")["Units Sold"].sum().reset_index()
+    sales_over_time = (
+        sales_df.groupby("Date")["Total Sales"]
+        .sum()
+        .reset_index()
+    )
     st.line_chart(sales_over_time.set_index("Date"))
 
 # Run the app
