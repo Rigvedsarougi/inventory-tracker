@@ -12,7 +12,7 @@ st.set_page_config(
 @st.cache_data
 def load_product_data():
     try:
-        product_data = pd.read_csv("data.csv")
+        product_data = pd.read_csv("DB Allgen Trading - Data.csv")
         # Clean up the data: Drop rows with missing Product Name, Price, or Category
         product_data = product_data.dropna(subset=["Product Name", "Price", "Product Category"])
         return product_data
