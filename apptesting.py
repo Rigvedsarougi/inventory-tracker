@@ -18,24 +18,34 @@ def load_product_data():
         product_data = product_data.dropna(subset=["Product Name", "Price", "Product Category"])
         return product_data
     except FileNotFoundError:
-        st.error("File 'data.csv' not found. Please ensure the file exists in the same directory as this app.")
+        st.error("File 'DB Allgen Trading - Data.csv' not found. Please ensure the file exists in the same directory as this app.")
+        st.stop()
+    except Exception as e:
+        st.error(f"An error occurred while loading the product data: {e}")
         st.stop()
 
 # Load inventory data (if it exists)
 def load_inventory_data():
-    inventory_file = Path("inventory.csv")
-    if inventory_file.exists():
-        return pd.read_csv(inventory_file)
-    else:
-        # Create a new inventory DataFrame with required columns
-        return pd.DataFrame(columns=[
-            "Product Name", "Product Category", "Price", "Quantity", "Order Value", 
-            "Action", "Bill No.", "Party Name", "Address", "City", "State", "Contact Number", "GST", "Date"
-        ])
+    try:
+        inventory_file = Path("inventory.csv")
+        if inventory_file.exists():
+            return pd.read_csv(inventory_file)
+        else:
+            # Create a new inventory DataFrame with required columns
+            return pd.DataFrame(columns=[
+                "Product Name", "Product Category", "Price", "Quantity", "Order Value", 
+                "Action", "Bill No.", "Party Name", "Address", "City", "State", "Contact Number", "GST", "Date"
+            ])
+    except Exception as e:
+        st.error(f"An error occurred while loading the inventory data: {e}")
+        st.stop()
 
 # Save inventory data to CSV
 def save_inventory_data(inventory_df):
-    inventory_df.to_csv("inventory.csv", index=False)
+    try:
+        inventory_df.to_csv("inventory.csv", index=False)
+    except Exception as e:
+        st.error(f"An error occurred while saving the inventory data: {e}")
 
 # Main app
 def main():
@@ -58,15 +68,15 @@ def main():
         )
 
         if selected_products:
-            # Input fields for inventory details (applied to all selected products)
+            # Input fields for billing details (applied to all selected products)
             action = st.selectbox("Action", ["Sale Out", "Return", "Add On"], index=0)
-            bill_no = st.text_input("Bill No.")
-            party_name = st.text_input("Party Name")
-            address = st.text_input("Address")
-            city = st.text_input("City")
-            state = st.text_input("State")
-            contact_number = st.text_input("Contact Number")
-            gst = st.text_input("GST")
+            bill_no = st.text_input("Bill No.", value="")
+            party_name = st.text_input("Party Name", value="")
+            address = st.text_input("Address", value="")
+            city = st.text_input("City", value="")
+            state = st.text_input("State", value="")
+            contact_number = st.text_input("Contact Number", value="")
+            gst = st.text_input("GST", value="")
             current_date = st.date_input("Date", value=datetime.today())
 
             # Add to inventory
