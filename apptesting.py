@@ -25,7 +25,10 @@ def load_product_data():
 def load_inventory_data():
     inventory_file = Path("inventory.csv")
     if inventory_file.exists():
-        return pd.read_csv(inventory_file)
+        inventory_df = pd.read_csv(inventory_file)
+        # Convert the 'Date' column to datetime
+        inventory_df["Date"] = pd.to_datetime(inventory_df["Date"], errors="coerce")
+        return inventory_df
     else:
         # Create a new inventory DataFrame with required columns
         return pd.DataFrame(columns=[
