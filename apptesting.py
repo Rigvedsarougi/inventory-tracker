@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Load product data and Party data
-biolume_df = pd.read_csv('MKT+Biolume - Inventory System - Invoice (2).csv')
+biolume_df = pd.read_csv('DB Allgen Trading - Data.csv')
 party_df = pd.read_csv('MKT+Biolume - Inventory System - Party (2).csv')
 
 # Set the title and favicon
