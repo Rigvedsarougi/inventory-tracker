@@ -18,34 +18,24 @@ def load_product_data():
         product_data = product_data.dropna(subset=["Product Name", "Price", "Product Category"])
         return product_data
     except FileNotFoundError:
-        st.error("File 'DB Allgen Trading - Data.csv' not found. Please ensure the file exists in the same directory as this app.")
-        st.stop()
-    except Exception as e:
-        st.error(f"An error occurred while loading the product data: {e}")
+        st.error("File 'data.csv' not found. Please ensure the file exists in the same directory as this app.")
         st.stop()
 
 # Load inventory data (if it exists)
 def load_inventory_data():
-    try:
-        inventory_file = Path("inventory.csv")
-        if inventory_file.exists():
-            return pd.read_csv(inventory_file)
-        else:
-            # Create a new inventory DataFrame with required columns
-            return pd.DataFrame(columns=[
-                "Product Name", "Product Category", "Price", "Quantity", "Order Value", 
-                "Action", "Bill No.", "Party Name", "Address", "City", "State", "Contact Number", "GST", "Date"
-            ])
-    except Exception as e:
-        st.error(f"An error occurred while loading the inventory data: {e}")
-        st.stop()
+    inventory_file = Path("inventory.csv")
+    if inventory_file.exists():
+        return pd.read_csv(inventory_file)
+    else:
+        # Create a new inventory DataFrame with required columns
+        return pd.DataFrame(columns=[
+            "Product Name", "Product Category", "Price", "Units Sold", "Description", 
+            "Action", "Bill No.", "Party Name", "Address", "City", "State", "Contact Number", "GST", "Date"
+        ])
 
 # Save inventory data to CSV
 def save_inventory_data(inventory_df):
-    try:
-        inventory_df.to_csv("inventory.csv", index=False)
-    except Exception as e:
-        st.error(f"An error occurred while saving the inventory data: {e}")
+    inventory_df.to_csv("inventory.csv", index=False)
 
 # Main app
 def main():
@@ -68,15 +58,15 @@ def main():
         )
 
         if selected_products:
-            # Input fields for billing details (applied to all selected products)
+            # Input fields for inventory details (applied to all selected products)
             action = st.selectbox("Action", ["Sale Out", "Return", "Add On"], index=0)
-            bill_no = st.text_input("Bill No.", value="")
-            party_name = st.text_input("Party Name", value="")
-            address = st.text_input("Address", value="")
-            city = st.text_input("City", value="")
-            state = st.text_input("State", value="")
-            contact_number = st.text_input("Contact Number", value="")
-            gst = st.text_input("GST", value="")
+            bill_no = st.text_input("Bill No.")
+            party_name = st.text_input("Party Name")
+            address = st.text_input("Address")
+            city = st.text_input("City")
+            state = st.text_input("State")
+            contact_number = st.text_input("Contact Number")
+            gst = st.text_input("GST")
             current_date = st.date_input("Date", value=datetime.today())
 
             # Add to inventory
@@ -86,24 +76,13 @@ def main():
                     # Fetch product details from data.csv
                     product_details = product_data[product_data["Product Name"] == product_name].iloc[0]
                     
-                    # Input quantity for each product
-                    quantity = st.number_input(
-                        f"Quantity for {product_name}",
-                        min_value=1,
-                        value=1,
-                        key=f"quantity_{product_name}",
-                    )
-
-                    # Calculate order value (Price * Quantity)
-                    order_value = product_details["Price"] * quantity
-
                     # Create a new row for each selected product
                     new_row = {
                         "Product Name": product_name,
                         "Product Category": product_details["Product Category"],
                         "Price": product_details["Price"],
-                        "Quantity": quantity,
-                        "Order Value": order_value,
+                        "Units Sold": 0,  # Default to 0, can be updated later
+                        "Description": product_details.get("Description", ""),
                         "Action": action,
                         "Bill No.": bill_no,
                         "Party Name": party_name,
@@ -128,7 +107,6 @@ def main():
         num_rows="dynamic",
         column_config={
             "Price": st.column_config.NumberColumn(format="$%.2f"),
-            "Order Value": st.column_config.NumberColumn(format="$%.2f"),
             "Date": st.column_config.DateColumn(format="YYYY-MM-DD"),
         },
         key="inventory_editor",
@@ -144,8 +122,8 @@ def main():
     col1, col2 = st.columns(2)
 
     with col1:
-        st.write("**Order Value by Product**")
-        st.bar_chart(edited_df.set_index("Product Name")["Order Value"])
+        st.write("**Units Sold by Product**")
+        st.bar_chart(edited_df.set_index("Product Name")["Units Sold"])
 
     with col2:
         st.write("**Actions by Product**")
