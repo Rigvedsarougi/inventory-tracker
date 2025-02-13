@@ -44,7 +44,7 @@ def save_inventory_data(inventory_df):
 
 # Main app
 def main():
-    st.title(":shopping_bags: Inventory Tracker")
+    st.title(":shopping_bags: Biolume: ALLGEN TRADING Inventory System")
     st.info("Welcome to the Inventory Management System! Use the table below to manage your inventory.")
 
     # Load product and inventory data
