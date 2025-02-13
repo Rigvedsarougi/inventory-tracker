@@ -246,10 +246,6 @@ def main():
     elif app_mode == "Invoice Generation":
         st.subheader("Invoice Generation")
 
-        # Load product data for invoice
-        biolume_df = pd.read_csv('MKT+Biolume - Inventory System - Invoice (2).csv')
-        party_df = pd.read_csv('MKT+Biolume - Inventory System - Party (2).csv')
-
         # Dropdown for selecting Party from CSV
         party_names = party_df['Party'].tolist()
         selected_party = st.selectbox("Select Party", party_names)
