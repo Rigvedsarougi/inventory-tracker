@@ -9,7 +9,6 @@ from pathlib import Path
 biolume_df = pd.read_csv('MKT+Biolume - Inventory System - Invoice (2).csv')
 party_df = pd.read_csv('MKT+Biolume - Inventory System - Party (2).csv')
 
-
 # Set the title and favicon
 st.set_page_config(
     page_title="Inventory and Invoice System",
@@ -296,8 +295,8 @@ def main():
                 with open(pdf_file, "rb") as f:
                     st.download_button("Download Invoice", f, file_name=pdf_file)
                 
-                # Show approval button
-                if st.button("Approve Invoice"):
+                # Show approval button in the sidebar
+                if st.sidebar.button("Approve Invoice"):
                     # Load inventory data
                     inventory_df = load_inventory_data()
                     
