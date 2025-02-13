@@ -29,7 +29,7 @@ def load_inventory_data():
     else:
         # Create a new inventory DataFrame with required columns
         return pd.DataFrame(columns=[
-            "Product Name", "Product Category", "Price", "Units Sold", "Description", 
+            "Product Name", "Product Category", "Price", "Quantity", "Order Value", 
             "Action", "Bill No.", "Party Name", "Address", "City", "State", "Contact Number", "GST", "Date"
         ])
 
@@ -76,13 +76,24 @@ def main():
                     # Fetch product details from data.csv
                     product_details = product_data[product_data["Product Name"] == product_name].iloc[0]
                     
+                    # Input quantity for each product
+                    quantity = st.number_input(
+                        f"Quantity for {product_name}",
+                        min_value=1,
+                        value=1,
+                        key=f"quantity_{product_name}",
+                    )
+
+                    # Calculate order value (Price * Quantity)
+                    order_value = product_details["Price"] * quantity
+
                     # Create a new row for each selected product
                     new_row = {
                         "Product Name": product_name,
                         "Product Category": product_details["Product Category"],
                         "Price": product_details["Price"],
-                        "Units Sold": 0,  # Default to 0, can be updated later
-                        "Description": product_details.get("Description", ""),
+                        "Quantity": quantity,
+                        "Order Value": order_value,
                         "Action": action,
                         "Bill No.": bill_no,
                         "Party Name": party_name,
@@ -107,6 +118,7 @@ def main():
         num_rows="dynamic",
         column_config={
             "Price": st.column_config.NumberColumn(format="$%.2f"),
+            "Order Value": st.column_config.NumberColumn(format="$%.2f"),
             "Date": st.column_config.DateColumn(format="YYYY-MM-DD"),
         },
         key="inventory_editor",
@@ -122,8 +134,8 @@ def main():
     col1, col2 = st.columns(2)
 
     with col1:
-        st.write("**Units Sold by Product**")
-        st.bar_chart(edited_df.set_index("Product Name")["Units Sold"])
+        st.write("**Order Value by Product**")
+        st.bar_chart(edited_df.set_index("Product Name")["Order Value"])
 
     with col2:
         st.write("**Actions by Product**")
