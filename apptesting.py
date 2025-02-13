@@ -48,22 +48,17 @@ def main():
 
     # Sidebar for adding new products
     with st.sidebar:
-        st.subheader("Add New Product")
-        selected_product = st.selectbox(
-            "Select Product",
+        st.subheader("Add New Products by Bill No.")
+        
+        # Multi-select for products
+        selected_products = st.multiselect(
+            "Select Products",
             product_data["Product Name"].unique(),
-            index=None,
-            placeholder="Choose a product...",
+            placeholder="Choose products...",
         )
-        if selected_product:
-            # Fetch product details from data.csv
-            product_details = product_data[product_data["Product Name"] == selected_product].iloc[0]
-            st.write(f"**Price:** ${product_details['Price']:.2f}")
-            st.write(f"**Category:** {product_details['Product Category']}")
 
-            # Input fields for inventory details
-            units_sold = st.number_input("Units Sold", min_value=0, value=0)
-            description = st.text_input("Description", value=product_details.get("Description", ""))
+        if selected_products:
+            # Input fields for inventory details (applied to all selected products)
             action = st.selectbox("Action", ["Sale Out", "Return", "Add On"], index=0)
             bill_no = st.text_input("Bill No.")
             party_name = st.text_input("Party Name")
@@ -76,25 +71,34 @@ def main():
 
             # Add to inventory
             if st.button("Add to Inventory"):
-                new_row = {
-                    "Product Name": selected_product,
-                    "Product Category": product_details["Product Category"],
-                    "Price": product_details["Price"],
-                    "Units Sold": units_sold,
-                    "Description": description,
-                    "Action": action,
-                    "Bill No.": bill_no,
-                    "Party Name": party_name,
-                    "Address": address,
-                    "City": city,
-                    "State": state,
-                    "Contact Number": contact_number,
-                    "GST": gst,
-                    "Date": current_date,
-                }
-                inventory_df = pd.concat([inventory_df, pd.DataFrame([new_row])], ignore_index=True)
+                new_rows = []
+                for product_name in selected_products:
+                    # Fetch product details from data.csv
+                    product_details = product_data[product_data["Product Name"] == product_name].iloc[0]
+                    
+                    # Create a new row for each selected product
+                    new_row = {
+                        "Product Name": product_name,
+                        "Product Category": product_details["Product Category"],
+                        "Price": product_details["Price"],
+                        "Units Sold": 0,  # Default to 0, can be updated later
+                        "Description": product_details.get("Description", ""),
+                        "Action": action,
+                        "Bill No.": bill_no,
+                        "Party Name": party_name,
+                        "Address": address,
+                        "City": city,
+                        "State": state,
+                        "Contact Number": contact_number,
+                        "GST": gst,
+                        "Date": current_date,
+                    }
+                    new_rows.append(new_row)
+
+                # Add all new rows to the inventory DataFrame
+                inventory_df = pd.concat([inventory_df, pd.DataFrame(new_rows)], ignore_index=True)
                 save_inventory_data(inventory_df)
-                st.success(f"Added {selected_product} to inventory!")
+                st.success(f"Added {len(selected_products)} products to inventory under Bill No. {bill_no}!")
 
     # Display inventory table
     st.subheader("Inventory Table")
