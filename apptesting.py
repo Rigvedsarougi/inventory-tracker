@@ -26,8 +26,8 @@ def load_inventory_data():
     inventory_file = Path("inventory.csv")
     if inventory_file.exists():
         inventory_df = pd.read_csv(inventory_file)
-        # Convert the 'Date' column to datetime
-        inventory_df["Date"] = pd.to_datetime(inventory_df["Date"], errors="coerce")
+        # Convert the 'Date' column to datetime64[ns] (PyArrow-compatible)
+        inventory_df["Date"] = pd.to_datetime(inventory_df["Date"], errors="coerce").dt.date
         return inventory_df
     else:
         # Create a new inventory DataFrame with required columns
@@ -38,6 +38,8 @@ def load_inventory_data():
 
 # Save inventory data to CSV
 def save_inventory_data(inventory_df):
+    # Convert the 'Date' column back to string for saving to CSV
+    inventory_df["Date"] = inventory_df["Date"].astype(str)
     inventory_df.to_csv("inventory.csv", index=False)
 
 # Main app
