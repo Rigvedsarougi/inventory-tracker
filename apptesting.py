@@ -138,16 +138,20 @@ def main():
 
     # Visualizations
     st.subheader("Inventory Insights")
-    col1, col2 = st.columns(2)
 
-    with col1:
-        st.write("**Units Sold by Product**")
-        st.bar_chart(edited_df.set_index("Product Name")["Units Sold"])
+    # Calculate total sales
+    edited_df["Total Sales"] = edited_df["Price"] * edited_df["Units Sold"]
+    total_sales = edited_df["Total Sales"].sum()
 
-    with col2:
-        st.write("**Actions by Product**")
-        action_counts = edited_df["Action"].value_counts()
-        st.bar_chart(action_counts)
+    # Display total sales
+    st.write(f"**Total Sales:** ${total_sales:.2f}")
+
+    # Calculate top-selling products
+    top_selling_products = edited_df.groupby("Product Name")["Units Sold"].sum().nlargest(5)
+
+    # Display top-selling products
+    st.write("**Top Selling Products**")
+    st.bar_chart(top_selling_products)
 
 # Run the app
 if __name__ == "__main__":
