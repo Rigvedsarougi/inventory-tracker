@@ -5,7 +5,7 @@ from datetime import datetime
 
 # Set the title and favicon
 st.set_page_config(
-    page_title="Inventory Tracker",
+    page_title="Biolume: ALLGEN TRADING Inventory System",
     page_icon=":shopping_bags:",
 )
 
