@@ -5,7 +5,7 @@ from datetime import datetime
 
 # Set the title and favicon
 st.set_page_config(
-    page_title="Biolume: ALLGEN TRADING Inventory System",
+    page_title="Inventory Tracker",
     page_icon=":shopping_bags:",
 )
 
@@ -26,8 +26,8 @@ def load_inventory_data():
     inventory_file = Path("inventory.csv")
     if inventory_file.exists():
         inventory_df = pd.read_csv(inventory_file)
-        # Convert the 'Date' column to datetime64[ns] (PyArrow-compatible)
-        inventory_df["Date"] = pd.to_datetime(inventory_df["Date"], errors="coerce").dt.date
+        # Convert the 'Date' column to datetime
+        inventory_df["Date"] = pd.to_datetime(inventory_df["Date"], errors="coerce")
         return inventory_df
     else:
         # Create a new inventory DataFrame with required columns
@@ -38,13 +38,11 @@ def load_inventory_data():
 
 # Save inventory data to CSV
 def save_inventory_data(inventory_df):
-    # Convert the 'Date' column back to string for saving to CSV
-    inventory_df["Date"] = inventory_df["Date"].astype(str)
     inventory_df.to_csv("inventory.csv", index=False)
 
 # Main app
 def main():
-    st.title(":shopping_bags: Biolume: ALLGEN TRADING Inventory System")
+    st.title(":shopping_bags: Inventory Tracker")
     st.info("Welcome to the Inventory Management System! Use the table below to manage your inventory.")
 
     # Load product and inventory data
