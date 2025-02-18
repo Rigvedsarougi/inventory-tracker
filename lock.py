@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 from pathlib import Path
 
 # Set the title and favicon
@@ -10,7 +8,7 @@ st.set_page_config(
     page_icon=":shopping_bags:",
 )
 
-# User credentials
+# User credentials (same as before)
 user_credentials = {
     "admin": {"username": "admin", "password": "1234", "role": "admin"},
     "viewer1": {"username": "viewer1", "password": "1234", "role": "viewer"},
@@ -72,65 +70,58 @@ def main():
             viewer_system()
         else:
             st.error("Invalid role detected.")
-    
+
 def inventory_system():
-    # The full inventory system functionality for Admin
-    st.title(":shopping_bags: Inventory Tracker")
-    st.info("Manage your inventory efficiently!")
+    # Full inventory system functionality for Admin
+    st.title(":shopping_bags: Inventory Dashboard")
+    st.info("Welcome to the Admin Dashboard! Manage and track product sales efficiently.")
 
     # Load product and inventory data
     product_data = load_product_data()
     inventory_df = load_inventory_data()
 
-    # Sidebar for adding multiple products (Admin functionality)
-    with st.sidebar:
-        st.subheader("Add Products")
-        selected_products = st.multiselect(
-            "Select Products",
-            product_data["Product Name"].unique()
-        )
+    # Overview section - key insights
+    st.subheader("Overview")
+    total_quantity = inventory_df["Quantity"].sum()
+    total_sales_value = (inventory_df["Quantity"] * inventory_df["Price"]).sum()
+    
+    st.metric("Total Quantity Sold", total_quantity)
+    st.metric("Total Sales Value", f"${total_sales_value:,.2f}")
 
-        if selected_products:
-            product_entries = []
-            for product in selected_products:
-                product_details = product_data[product_data["Product Name"] == product].iloc[0]
-                st.write(f"**{product}** - ${product_details['Price']:.2f} ({product_details['Product Category']})")
-                quantity = st.number_input(f"Quantity for {product}", min_value=1, value=1)
-                discount = st.number_input(f"Discount for {product} (%)", min_value=0, value=0)
-                product_entries.append({
-                    "Product Name": product,
-                    "Product Category": product_details["Product Category"],
-                    "Price": product_details["Price"],
-                    "Quantity": quantity,
-                    "Discount": discount,
-                })
+    # Top-selling products
+    top_selling_products = inventory_df.groupby("Product Name").agg(
+        Total_Quantity=("Quantity", "sum"),
+        Total_Sale_Value=("Price", "sum")
+    ).reset_index()
 
-            # Common fields for all products
-            st.subheader("Invoice Details")
-            action = st.text_input("Action", "Sale")
-            bill_no = st.text_input("Bill No.")
-            party_name = st.text_input("Party Name")
-            address = st.text_area("Address")
-            city = st.text_input("City")
-            state = st.text_input("State")
-            contact_number = st.text_input("Contact Number")
-            gst = st.text_input("GST")
-            date = st.date_input("Date")
+    top_selling_products["Total_Sale_Value"] = top_selling_products["Total_Quantity"] * top_selling_products["Total_Sale_Value"]
+    top_selling_products = top_selling_products.sort_values(by="Total_Sale_Value", ascending=False)
 
-            if st.button("Add to Inventory"):
-                for entry in product_entries:
-                    entry.update({
-                        "Action": action, "Bill No.": bill_no, "Party Name": party_name,
-                        "Address": address, "City": city, "State": state, "Contact Number": contact_number,
-                        "GST": gst, "Date": date
-                    })
-                new_entries_df = pd.DataFrame(product_entries)
-                if not new_entries_df.empty:
-                    inventory_df = pd.concat([inventory_df, new_entries_df], ignore_index=True)
-                    save_inventory_data(inventory_df)
-                    st.success(f"Added {len(product_entries)} product(s) to inventory!")
-                else:
-                    st.warning("No products selected to add.")
+    st.subheader("Top-Selling Products")
+    st.write(top_selling_products.head(10))  # Display top 10 products by sales value
+
+    # Visualizations Section
+    st.subheader("Product-wise Sales Visualization")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**Total Quantity by Product**")
+        st.bar_chart(top_selling_products.set_index("Product Name")["Total_Quantity"])
+
+    with col2:
+        st.write("**Total Sale Value by Product**")
+        st.bar_chart(top_selling_products.set_index("Product Name")["Total_Sale_Value"])
+
+    # Pie chart of sales distribution by product category
+    st.subheader("Sales Distribution by Product Category")
+    category_sales = inventory_df.groupby("Product Category").agg(
+        Total_Quantity=("Quantity", "sum"),
+        Total_Sale_Value=("Price", "sum")
+    ).reset_index()
+
+    category_sales["Total_Sale_Value"] = category_sales["Total_Quantity"] * category_sales["Total_Sale_Value"]
+    
+    st.write(category_sales)
+    st.pyplot(category_sales.set_index("Product Category")["Total_Sale_Value"].plot.pie(autopct="%1.1f%%", figsize=(5, 5)))
 
     # Display inventory table for Admin
     st.subheader("Inventory Table")
@@ -149,52 +140,16 @@ def inventory_system():
         save_inventory_data(edited_df)
         st.success("Inventory updated successfully!")
 
-    # Product-wise sales summary
-    st.subheader("Product-wise Sales Summary")
-    
-    # Calculate total sales per product
-    sales_df = inventory_df.groupby("Product Name").agg(
-        Total_Quantity=("Quantity", "sum"),
-        Total_Sale_Value=("Price", "sum")
-    ).reset_index()
-
-    # Calculate the total sale value (Quantity * Price)
-    sales_df["Total_Sale_Value"] = sales_df["Total_Quantity"] * sales_df["Total_Sale_Value"]
-
-    # Display the product-wise sales summary table
-    st.write(sales_df)
-
-    # Visualization: Horizontal Bar Graph of Total Sales Quantity
-    st.subheader("Total Sales Quantity by Product")
-
-    # Create a horizontal bar chart using Matplotlib
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(
-        x="Total_Quantity",
-        y="Product Name",
-        data=sales_df,
-        palette="viridis",
-        ax=ax
-    )
-    ax.set_xlabel("Total Sale Quantity")
-    ax.set_ylabel("Product Name")
-    ax.set_title("Total Sales Quantity by Product")
-    
-    # Display the chart
-    st.pyplot(fig)
-
 def viewer_system():
-    # Viewer can only see the product-wise sales summary and inventory
+    # Viewer system (only viewing capabilities)
     st.title(":shopping_bags: Inventory Viewer")
-    st.info("View product-wise sales and inventory details.")
-    
-    # Load product and inventory data
+    st.info("Welcome to the Viewer Dashboard! View product-wise sales and inventory details.")
+
+    # Load inventory data
     inventory_df = load_inventory_data()
 
     # Product-wise sales summary (View only)
     st.subheader("Product-wise Sales Summary")
-    
-    # Calculate total sales per product
     sales_df = inventory_df.groupby("Product Name").agg(
         Total_Quantity=("Quantity", "sum"),
         Total_Sale_Value=("Price", "sum")
@@ -206,24 +161,15 @@ def viewer_system():
     # Display the product-wise sales summary table
     st.write(sales_df)
 
-    # Visualization: Horizontal Bar Graph of Total Sales Quantity
-    st.subheader("Total Sales Quantity by Product")
-
-    # Create a horizontal bar chart using Matplotlib
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(
-        x="Total_Quantity",
-        y="Product Name",
-        data=sales_df,
-        palette="viridis",
-        ax=ax
-    )
-    ax.set_xlabel("Total Sale Quantity")
-    ax.set_ylabel("Product Name")
-    ax.set_title("Total Sales Quantity by Product")
-    
-    # Display the chart
-    st.pyplot(fig)
+    # Visualizations
+    st.subheader("Inventory Insights")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**Total Quantity by Product**")
+        st.bar_chart(sales_df.set_index("Product Name")["Total_Quantity"])
+    with col2:
+        st.write("**Total Sale Value by Product**")
+        st.bar_chart(sales_df.set_index("Product Name")["Total_Sale_Value"])
 
 if __name__ == "__main__":
     main()
