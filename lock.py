@@ -11,7 +11,7 @@ st.set_page_config(
 # User credentials
 user_credentials = {
     "admin": {"username": "admin", "password": "1234", "role": "admin"},
-    "viewer1": {"username": "viewer1", "password": "1234", "role": "viewer"},
+    "viewer1": {"username": "rigved", "password": "1234", "role": "viewer"},
     "viewer2": {"username": "viewer2", "password": "1234", "role": "viewer"},
     "viewer3": {"username": "viewer3", "password": "1234", "role": "viewer"},
 }
