@@ -20,17 +20,20 @@ def load_product_data():
         st.error("File 'data.csv' not found. Please ensure the file exists in the same directory as this app.")
         st.stop()
 
-# Load inventory data
 def load_inventory_data():
     inventory_file = Path("inventory.csv")
     if inventory_file.exists():
-        return pd.read_csv(inventory_file)
+        inventory_df = pd.read_csv(inventory_file, dtype={"Bill No.": str})
     else:
-        return pd.DataFrame(columns=[
+        inventory_df = pd.DataFrame(columns=[
             "Product Name", "Product Category", "Price", "Units Sold", "Description", 
             "Action", "Bill No.", "Party Name", "Address", "City", "State", 
             "Contact Number", "GST", "Date", "Quantity", "Discount"
         ])
+        inventory_df["Bill No."] = inventory_df["Bill No."].astype(str)
+    
+    return inventory_df
+
 
 # Save inventory data
 def save_inventory_data(inventory_df):
