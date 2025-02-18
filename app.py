@@ -8,27 +8,26 @@ st.set_page_config(
     page_icon=":shopping_bags:",
 )
 
-# Load product data from data.csv
+# Load product data from CSV
 @st.cache_data
 def load_product_data():
     try:
         product_data = pd.read_csv("DB Allgen Trading - Data.csv")
-        # Clean up the data: Drop rows with missing Product Name, Price, or Category
         product_data = product_data.dropna(subset=["Product Name", "Price", "Product Category"])
         return product_data
     except FileNotFoundError:
-        st.error("File 'data.csv' not found. Please ensure the file exists in the same directory as this app.")
+        st.error("File 'DB Allgen Trading - Data.csv' not found. Please ensure the file exists.")
         st.stop()
 
-# Load inventory data (if it exists)
+# Load inventory data
+inventory_file = Path("inventory.csv")
 def load_inventory_data():
-    inventory_file = Path("inventory.csv")
     if inventory_file.exists():
         return pd.read_csv(inventory_file)
     else:
-        # Create a new inventory DataFrame with required columns
         return pd.DataFrame(columns=[
-            "Product Name", "Product Category", "Price", "Units Sold", "Units Left", "Reorder Point", "Description"
+            "Product Name", "Product Category", "Price", "Quantity", "Discount", "Action", 
+            "Bill No.", "Party Name", "Address", "City", "State", "Contact Number", "GST", "Date"
         ])
 
 # Save inventory data to CSV
@@ -38,47 +37,64 @@ def save_inventory_data(inventory_df):
 # Main app
 def main():
     st.title(":shopping_bags: Inventory Tracker")
-    st.info("Welcome to the Inventory Management System! Use the table below to manage your inventory.")
+    st.info("Manage your inventory efficiently!")
 
     # Load product and inventory data
     product_data = load_product_data()
     inventory_df = load_inventory_data()
 
-    # Sidebar for adding new products
+    # Sidebar for adding multiple products
     with st.sidebar:
-        st.subheader("Add New Product")
-        selected_product = st.selectbox(
-            "Select Product",
-            product_data["Product Name"].unique(),
-            index=None,
-            placeholder="Choose a product...",
+        st.subheader("Add Products")
+        selected_products = st.multiselect(
+            "Select Products",
+            product_data["Product Name"].unique()
         )
-        if selected_product:
-            # Fetch product details from data.csv
-            product_details = product_data[product_data["Product Name"] == selected_product].iloc[0]
-            st.write(f"**Price:** ${product_details['Price']:.2f}")
-            st.write(f"**Category:** {product_details['Product Category']}")
 
-            # Input fields for inventory details
-            units_left = st.number_input("Units Left", min_value=0, value=0)
-            units_sold = st.number_input("Units Sold", min_value=0, value=0)
-            reorder_point = st.number_input("Reorder Point", min_value=0, value=5)
-            description = st.text_input("Description", value=product_details.get("Description", ""))
-
-            # Add to inventory
-            if st.button("Add to Inventory"):
-                new_row = {
-                    "Product Name": selected_product,
+        if selected_products:
+            product_entries = []
+            for product in selected_products:
+                product_details = product_data[product_data["Product Name"] == product].iloc[0]
+                st.write(f"**{product}** - ${product_details['Price']:.2f} ({product_details['Product Category']})")
+                quantity = st.number_input(f"Quantity for {product}", min_value=1, value=1)
+                discount = st.number_input(f"Discount for {product} (%)", min_value=0, value=0)
+                product_entries.append({
+                    "Product Name": product,
                     "Product Category": product_details["Product Category"],
                     "Price": product_details["Price"],
-                    "Units Sold": units_sold,
-                    "Units Left": units_left,
-                    "Reorder Point": reorder_point,
-                    "Description": description,
-                }
-                inventory_df = pd.concat([inventory_df, pd.DataFrame([new_row])], ignore_index=True)
-                save_inventory_data(inventory_df)
-                st.success(f"Added {selected_product} to inventory!")
+                    "Quantity": quantity,
+                    "Discount": discount,
+                })
+
+            # Common fields for all products
+            st.subheader("Invoice Details")
+            action = st.text_input("Action", "Sale")
+            bill_no = st.text_input("Bill No.")
+            party_name = st.text_input("Party Name")
+            address = st.text_area("Address")
+            city = st.text_input("City")
+            state = st.text_input("State")
+            contact_number = st.text_input("Contact Number")
+            gst = st.text_input("GST")
+            date = st.date_input("Date")
+
+            if st.button("Add to Inventory"):
+                for entry in product_entries:
+                    entry.update({
+                        "Action": action, "Bill No.": bill_no, "Party Name": party_name,
+                        "Address": address, "City": city, "State": state, "Contact Number": contact_number,
+                        "GST": gst, "Date": date
+                    })
+                new_entries_df = pd.DataFrame(product_entries)
+                if not new_entries_df.empty:
+                    inventory_df = pd.concat([inventory_df, new_entries_df], ignore_index=True)
+                    save_inventory_data(inventory_df)
+                    st.success(f"Added {len(product_entries)} product(s) to inventory!")
+                else:
+                    st.warning("No products selected to add.")
+
+    # Calculate Total Sales for each product
+    inventory_df["Total Sales"] = inventory_df["Price"] * inventory_df["Quantity"]
 
     # Display inventory table
     st.subheader("Inventory Table")
@@ -87,7 +103,8 @@ def main():
         num_rows="dynamic",
         column_config={
             "Price": st.column_config.NumberColumn(format="$%.2f"),
-            "Reorder Point": st.column_config.NumberColumn(help="Minimum stock level before reordering."),
+            "Discount": st.column_config.NumberColumn(help="Enter discount percentage."),
+            "Total Sales": st.column_config.NumberColumn(format="$%.2f"),
         },
         key="inventory_editor",
     )
@@ -97,27 +114,15 @@ def main():
         save_inventory_data(edited_df)
         st.success("Inventory updated successfully!")
 
-    # Display low stock alerts
-    st.subheader("Low Stock Alerts")
-    low_stock = edited_df[edited_df["Units Left"] < edited_df["Reorder Point"]]
-    if not low_stock.empty:
-        st.warning("The following products are below their reorder point:")
-        st.dataframe(low_stock[["Product Name", "Units Left", "Reorder Point"]])
-    else:
-        st.success("All products are well-stocked!")
-
     # Visualizations
     st.subheader("Inventory Insights")
     col1, col2 = st.columns(2)
-
     with col1:
-        st.write("**Units Left by Product**")
-        st.bar_chart(edited_df.set_index("Product Name")["Units Left"])
-
+        st.write("**Total Quantity by Product**")
+        st.bar_chart(edited_df.set_index("Product Name")["Quantity"].sort_values(), use_container_width=True)
     with col2:
-        st.write("**Units Sold by Product**")
-        st.bar_chart(edited_df.set_index("Product Name")["Units Sold"])
+        st.write("**Total Sales by Product**")
+        st.bar_chart(edited_df.set_index("Product Name")["Total Sales"].sort_values(), use_container_width=True)
 
-# Run the app
 if __name__ == "__main__":
     main()
