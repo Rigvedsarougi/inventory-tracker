@@ -65,7 +65,7 @@ def main():
         if role == "admin":
             st.session_state.logged_in = True
             inventory_system()
-        elif role == "viewer":
+        elif role == "viewer" or "rigved":
             st.session_state.logged_in = True
             viewer_system()
         else:
