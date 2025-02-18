@@ -3,7 +3,7 @@ import pandas as pd
 from pathlib import Path
 
 st.set_page_config(
-    page_title="Biolume: ALLGEN TRADING Sale System",
+    page_title="Biolume: ALLGEN TRADING Inventory System",
     page_icon=":shopping_bags:",
 )
 
@@ -152,6 +152,7 @@ def viewer_system():
     st.subheader("Product-wise Sales Summary")
     sales_df = inventory_df.groupby("Product Name").agg(
         Total_Quantity=("Quantity", "sum"),
+        Total_Sale_Value=("Price", "sum")
     ).reset_index()
     sales_df["Total_Sale_Value"] = sales_df["Total_Quantity"] * sales_df["Total_Sale_Value"]
     st.write(sales_df)
