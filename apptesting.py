@@ -5,11 +5,11 @@ from datetime import datetime
 
 # Set the title and favicon
 st.set_page_config(
-    page_title="Inventory Tracker",
-    page_icon=":shopping_bags:",
+    page_title="Inventory Management System",
+    page_icon="📦",
 )
 
-# Load product data from data.csv
+# Load product data from CSV
 @st.cache_data
 def load_product_data():
     try:
@@ -42,8 +42,8 @@ def save_inventory_data(inventory_df):
 
 # Main app
 def main():
-    st.title(":shopping_bags: Inventory Tracker")
-    st.info("Welcome to the Inventory Management System! Use the table below to manage your inventory.")
+    st.title("📦 Inventory Management System")
+    st.info("Welcome to the Inventory Management System! Use the sidebar to add products and manage inventory.")
 
     # Load product and inventory data
     product_data = load_product_data()
