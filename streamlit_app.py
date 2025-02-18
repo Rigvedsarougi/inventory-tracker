@@ -1,290 +1,128 @@
-from collections import defaultdict
-from pathlib import Path
-import sqlite3
-
 import streamlit as st
-import altair as alt
 import pandas as pd
+from pathlib import Path
 
-
-# Set the title and favicon that appear in the Browser's tab bar.
+# Set the title and favicon
 st.set_page_config(
-    page_title="Inventory tracker",
-    page_icon=":shopping_bags:",  # This is an emoji shortcode. Could be a URL too.
+    page_title="Biolume: ALLGEN TRADING Inventory System",
+    page_icon=":shopping_bags:",
 )
 
-
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
-
-
-def connect_db():
-    """Connects to the sqlite database."""
-
-    DB_FILENAME = Path(__file__).parent / "inventory.db"
-    db_already_exists = DB_FILENAME.exists()
-
-    conn = sqlite3.connect(DB_FILENAME)
-    db_was_just_created = not db_already_exists
-
-    return conn, db_was_just_created
-
-
-def initialize_data(conn):
-    """Initializes the inventory table with some data."""
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS inventory (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_name TEXT,
-            price REAL,
-            units_sold INTEGER,
-            units_left INTEGER,
-            cost_price REAL,
-            reorder_point INTEGER,
-            description TEXT
-        )
-        """
-    )
-
-    cursor.execute(
-        """
-        INSERT INTO inventory
-            (item_name, price, units_sold, units_left, cost_price, reorder_point, description)
-        VALUES
-            -- Beverages
-            ('Bottled Water (500ml)', 1.50, 115, 15, 0.80, 16, 'Hydrating bottled water'),
-            ('Soda (355ml)', 2.00, 93, 8, 1.20, 10, 'Carbonated soft drink'),
-            ('Energy Drink (250ml)', 2.50, 12, 18, 1.50, 8, 'High-caffeine energy drink'),
-            ('Coffee (hot, large)', 2.75, 11, 14, 1.80, 5, 'Freshly brewed hot coffee'),
-            ('Juice (200ml)', 2.25, 11, 9, 1.30, 5, 'Fruit juice blend'),
-
-            -- Snacks
-            ('Potato Chips (small)', 2.00, 34, 16, 1.00, 10, 'Salted and crispy potato chips'),
-            ('Candy Bar', 1.50, 6, 19, 0.80, 15, 'Chocolate and candy bar'),
-            ('Granola Bar', 2.25, 3, 12, 1.30, 8, 'Healthy and nutritious granola bar'),
-            ('Cookies (pack of 6)', 2.50, 8, 8, 1.50, 5, 'Soft and chewy cookies'),
-            ('Fruit Snack Pack', 1.75, 5, 10, 1.00, 8, 'Assortment of dried fruits and nuts'),
-
-            -- Personal Care
-            ('Toothpaste', 3.50, 1, 9, 2.00, 5, 'Minty toothpaste for oral hygiene'),
-            ('Hand Sanitizer (small)', 2.00, 2, 13, 1.20, 8, 'Small sanitizer bottle for on-the-go'),
-            ('Pain Relievers (pack)', 5.00, 1, 5, 3.00, 3, 'Over-the-counter pain relief medication'),
-            ('Bandages (box)', 3.00, 0, 10, 2.00, 5, 'Box of adhesive bandages for minor cuts'),
-            ('Sunscreen (small)', 5.50, 6, 5, 3.50, 3, 'Small bottle of sunscreen for sun protection'),
-
-            -- Household
-            ('Batteries (AA, pack of 4)', 4.00, 1, 5, 2.50, 3, 'Pack of 4 AA batteries'),
-            ('Light Bulbs (LED, 2-pack)', 6.00, 3, 3, 4.00, 2, 'Energy-efficient LED light bulbs'),
-            ('Trash Bags (small, 10-pack)', 3.00, 5, 10, 2.00, 5, 'Small trash bags for everyday use'),
-            ('Paper Towels (single roll)', 2.50, 3, 8, 1.50, 5, 'Single roll of paper towels'),
-            ('Multi-Surface Cleaner', 4.50, 2, 5, 3.00, 3, 'All-purpose cleaning spray'),
-
-            -- Others
-            ('Lottery Tickets', 2.00, 17, 20, 1.50, 10, 'Assorted lottery tickets'),
-            ('Newspaper', 1.50, 22, 20, 1.00, 5, 'Daily newspaper')
-        """
-    )
-    conn.commit()
-
-
-def load_data(conn):
-    """Loads the inventory data from the database."""
-    cursor = conn.cursor()
-
+# Load product data from CSV
+@st.cache_data
+def load_product_data():
     try:
-        cursor.execute("SELECT * FROM inventory")
-        data = cursor.fetchall()
-    except:
-        return None
+        product_data = pd.read_csv("DB Allgen Trading - Data.csv")
+        product_data = product_data.dropna(subset=["Product Name", "Price", "Product Category"])
+        return product_data
+    except FileNotFoundError:
+        st.error("File 'DB Allgen Trading - Data.csv' not found. Please ensure the file exists.")
+        st.stop()
 
-    df = pd.DataFrame(
-        data,
-        columns=[
-            "id",
-            "item_name",
-            "price",
-            "units_sold",
-            "units_left",
-            "cost_price",
-            "reorder_point",
-            "description",
-        ],
-    )
+# Load inventory data
+inventory_file = Path("inventory.csv")
+def load_inventory_data():
+    if inventory_file.exists():
+        return pd.read_csv(inventory_file)
+    else:
+        return pd.DataFrame(columns=[
+            "Product Name", "Product Category", "Price", "Quantity", "Discount", "Action", 
+            "Bill No.", "Party Name", "Address", "City", "State", "Contact Number", "GST", "Date"
+        ])
 
-    return df
+# Save inventory data to CSV
+def save_inventory_data(inventory_df):
+    inventory_df.to_csv("inventory.csv", index=False)
 
+# Main app
+def main():
+    st.title(":shopping_bags: Inventory Tracker")
+    st.info("Manage your inventory efficiently!")
 
-def update_data(conn, df, changes):
-    """Updates the inventory data in the database."""
-    cursor = conn.cursor()
+    # Load product and inventory data
+    product_data = load_product_data()
+    inventory_df = load_inventory_data()
 
-    if changes["edited_rows"]:
-        deltas = st.session_state.inventory_table["edited_rows"]
-        rows = []
-
-        for i, delta in deltas.items():
-            row_dict = df.iloc[i].to_dict()
-            row_dict.update(delta)
-            rows.append(row_dict)
-
-        cursor.executemany(
-            """
-            UPDATE inventory
-            SET
-                item_name = :item_name,
-                price = :price,
-                units_sold = :units_sold,
-                units_left = :units_left,
-                cost_price = :cost_price,
-                reorder_point = :reorder_point,
-                description = :description
-            WHERE id = :id
-            """,
-            rows,
+    # Sidebar for adding multiple products
+    with st.sidebar:
+        st.subheader("Add Products")
+        selected_products = st.multiselect(
+            "Select Products",
+            product_data["Product Name"].unique()
         )
 
-    if changes["added_rows"]:
-        cursor.executemany(
-            """
-            INSERT INTO inventory
-                (id, item_name, price, units_sold, units_left, cost_price, reorder_point, description)
-            VALUES
-                (:id, :item_name, :price, :units_sold, :units_left, :cost_price, :reorder_point, :description)
-            """,
-            (defaultdict(lambda: None, row) for row in changes["added_rows"]),
-        )
+        if selected_products:
+            product_entries = []
+            for product in selected_products:
+                product_details = product_data[product_data["Product Name"] == product].iloc[0]
+                st.write(f"**{product}** - ${product_details['Price']:.2f} ({product_details['Product Category']})")
+                quantity = st.number_input(f"Quantity for {product}", min_value=1, value=1)
+                discount = st.number_input(f"Discount for {product} (%)", min_value=0, value=0)
+                product_entries.append({
+                    "Product Name": product,
+                    "Product Category": product_details["Product Category"],
+                    "Price": product_details["Price"],
+                    "Quantity": quantity,
+                    "Discount": discount,
+                })
 
-    if changes["deleted_rows"]:
-        cursor.executemany(
-            "DELETE FROM inventory WHERE id = :id",
-            ({"id": int(df.loc[i, "id"])} for i in changes["deleted_rows"]),
-        )
+            # Common fields for all products
+            st.subheader("Invoice Details")
+            action = st.text_input("Action", "Sale")
+            bill_no = st.text_input("Bill No.")
+            party_name = st.text_input("Party Name")
+            address = st.text_area("Address")
+            city = st.text_input("City")
+            state = st.text_input("State")
+            contact_number = st.text_input("Contact Number")
+            gst = st.text_input("GST")
+            date = st.date_input("Date")
 
-    conn.commit()
+            if st.button("Add to Inventory"):
+                for entry in product_entries:
+                    entry.update({
+                        "Action": action, "Bill No.": bill_no, "Party Name": party_name,
+                        "Address": address, "City": city, "State": state, "Contact Number": contact_number,
+                        "GST": gst, "Date": date
+                    })
+                new_entries_df = pd.DataFrame(product_entries)
+                if not new_entries_df.empty:
+                    inventory_df = pd.concat([inventory_df, new_entries_df], ignore_index=True)
+                    save_inventory_data(inventory_df)
+                    st.success(f"Added {len(product_entries)} product(s) to inventory!")
+                else:
+                    st.warning("No products selected to add.")
 
+    # Calculate Total Sales for each product
+    inventory_df["Total Sales"] = inventory_df["Price"] * inventory_df["Quantity"]
 
-# -----------------------------------------------------------------------------
-# Draw the actual page, starting with the inventory table.
-
-# Set the title that appears at the top of the page.
-"""
-# :shopping_bags: Inventory tracker
-
-**Welcome to Alice's Corner Store's intentory tracker!**
-This page reads and writes directly from/to our inventory database.
-"""
-
-st.info(
-    """
-    Use the table below to add, remove, and edit items.
-    And don't forget to commit your changes when you're done.
-    """
-)
-
-# Connect to database and create table if needed
-conn, db_was_just_created = connect_db()
-
-# Initialize data.
-if db_was_just_created:
-    initialize_data(conn)
-    st.toast("Database initialized with some sample data.")
-
-# Load data from database
-df = load_data(conn)
-
-# Display data with editable table
-edited_df = st.data_editor(
-    df,
-    disabled=["id"],  # Don't allow editing the 'id' column.
-    num_rows="dynamic",  # Allow appending/deleting rows.
-    column_config={
-        # Show dollar sign before price columns.
-        "price": st.column_config.NumberColumn(format="$%.2f"),
-        "cost_price": st.column_config.NumberColumn(format="$%.2f"),
-    },
-    key="inventory_table",
-)
-
-has_uncommitted_changes = any(len(v) for v in st.session_state.inventory_table.values())
-
-st.button(
-    "Commit changes",
-    type="primary",
-    disabled=not has_uncommitted_changes,
-    # Update data in database
-    on_click=update_data,
-    args=(conn, df, st.session_state.inventory_table),
-)
-
-
-# -----------------------------------------------------------------------------
-# Now some cool charts
-
-# Add some space
-""
-""
-""
-
-st.subheader("Units left", divider="red")
-
-need_to_reorder = df[df["units_left"] < df["reorder_point"]].loc[:, "item_name"]
-
-if len(need_to_reorder) > 0:
-    items = "\n".join(f"* {name}" for name in need_to_reorder)
-
-    st.error(f"We're running dangerously low on the items below:\n {items}")
-
-""
-""
-
-st.altair_chart(
-    # Layer 1: Bar chart.
-    alt.Chart(df)
-    .mark_bar(
-        orient="horizontal",
+    # Display inventory table
+    st.subheader("Inventory Table")
+    edited_df = st.data_editor(
+        inventory_df,
+        num_rows="dynamic",
+        column_config={
+            "Price": st.column_config.NumberColumn(format="$%.2f"),
+            "Discount": st.column_config.NumberColumn(help="Enter discount percentage."),
+            "Total Sales": st.column_config.NumberColumn(format="$%.2f"),
+        },
+        key="inventory_editor",
     )
-    .encode(
-        x="units_left",
-        y="item_name",
-    )
-    # Layer 2: Chart showing the reorder point.
-    + alt.Chart(df)
-    .mark_point(
-        shape="diamond",
-        filled=True,
-        size=50,
-        color="salmon",
-        opacity=1,
-    )
-    .encode(
-        x="reorder_point",
-        y="item_name",
-    ),
-    use_container_width=True,
-)
 
-st.caption("NOTE: The :diamonds: location shows the reorder point.")
+    # Save changes to inventory
+    if st.button("Save Changes"):
+        save_inventory_data(edited_df)
+        st.success("Inventory updated successfully!")
 
-""
-""
-""
+    # Visualizations
+    st.subheader("Inventory Insights")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**Total Quantity by Product**")
+        st.bar_chart(edited_df.set_index("Product Name")["Quantity"].sort_values(), use_container_width=True)
+    with col2:
+        st.write("**Total Sales by Product**")
+        st.bar_chart(edited_df.set_index("Product Name")["Total Sales"].sort_values(), use_container_width=True)
 
-# -----------------------------------------------------------------------------
-
-st.subheader("Best sellers", divider="orange")
-
-""
-""
-
-st.altair_chart(
-    alt.Chart(df)
-    .mark_bar(orient="horizontal")
-    .encode(
-        x="units_sold",
-        y=alt.Y("item_name").sort("-x"),
-    ),
-    use_container_width=True,
-)
+if __name__ == "__main__":
+    main()
