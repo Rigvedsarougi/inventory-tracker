@@ -18,7 +18,7 @@ def load_product_data():
         product_data = product_data.dropna(subset=["Product Name", "Price", "Product Category"])
         return product_data
     except FileNotFoundError:
-        st.error("File 'data.csv' not found. Please ensure the file exists in the same directory as this app.")
+        st.error("File 'DB Allgen Trading - Data.csv' not found. Please ensure the file exists in the same directory as this app.")
         st.stop()
 
 # Load inventory data (if it exists)
