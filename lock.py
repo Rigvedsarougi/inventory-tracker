@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from pathlib import Path
 
 # Set the title and favicon
@@ -162,15 +164,24 @@ def inventory_system():
     # Display the product-wise sales summary table
     st.write(sales_df)
 
-    # Visualizations
-    st.subheader("Inventory Insights")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("**Total Quantity by Product**")
-        st.bar_chart(edited_df.set_index("Product Name")["Quantity"])
-    with col2:
-        st.write("**Discount Applied by Product**")
-        st.bar_chart(edited_df.set_index("Product Name")["Discount"])
+    # Visualization: Horizontal Bar Graph of Total Sales Quantity
+    st.subheader("Total Sales Quantity by Product")
+
+    # Create a horizontal bar chart using Matplotlib
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(
+        x="Total_Quantity",
+        y="Product Name",
+        data=sales_df,
+        palette="viridis",
+        ax=ax
+    )
+    ax.set_xlabel("Total Sale Quantity")
+    ax.set_ylabel("Product Name")
+    ax.set_title("Total Sales Quantity by Product")
+    
+    # Display the chart
+    st.pyplot(fig)
 
 def viewer_system():
     # Viewer can only see the product-wise sales summary and inventory
@@ -195,15 +206,24 @@ def viewer_system():
     # Display the product-wise sales summary table
     st.write(sales_df)
 
-    # Visualizations
-    st.subheader("Inventory Insights")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("**Total Quantity by Product**")
-        st.bar_chart(inventory_df.set_index("Product Name")["Quantity"])
-    with col2:
-        st.write("**Discount Applied by Product**")
-        st.bar_chart(inventory_df.set_index("Product Name")["Discount"])
+    # Visualization: Horizontal Bar Graph of Total Sales Quantity
+    st.subheader("Total Sales Quantity by Product")
+
+    # Create a horizontal bar chart using Matplotlib
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(
+        x="Total_Quantity",
+        y="Product Name",
+        data=sales_df,
+        palette="viridis",
+        ax=ax
+    )
+    ax.set_xlabel("Total Sale Quantity")
+    ax.set_ylabel("Product Name")
+    ax.set_title("Total Sales Quantity by Product")
+    
+    # Display the chart
+    st.pyplot(fig)
 
 if __name__ == "__main__":
     main()
