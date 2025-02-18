@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 
-# Set the title and favicon
 st.set_page_config(
     page_title="Biolume: ALLGEN TRADING Inventory System",
     page_icon=":shopping_bags:",
@@ -11,7 +10,7 @@ st.set_page_config(
 # User credentials
 user_credentials = {
     "admin": {"username": "admin", "password": "1234", "role": "admin"},
-    "viewer1": {"username": "rigved", "password": "1234", "role": "viewer"},
+    "viewer1": {"username": "viewer1", "password": "1234", "role": "viewer"},
     "viewer2": {"username": "viewer2", "password": "1234", "role": "viewer"},
     "viewer3": {"username": "viewer3", "password": "1234", "role": "viewer"},
 }
@@ -24,69 +23,54 @@ def load_product_data():
         product_data = product_data.dropna(subset=["Product Name", "Price", "Product Category"])
         return product_data
     except FileNotFoundError:
-        st.error("File 'DB Allgen Trading - Data.csv' not found. Please ensure the file exists.")
+        st.error("File 'DB Allgen Trading - Data.csv' not found.")
         st.stop()
 
 # Load inventory data
 inventory_file = Path("inventory.csv")
 def load_inventory_data():
     if inventory_file.exists():
-        return pd.read_csv(inventory_file)
+        return pd.read_csv(inventory_file, parse_dates=["Date"])
     else:
         return pd.DataFrame(columns=[
             "Product Name", "Product Category", "Price", "Quantity", "Discount", "Action", 
             "Bill No.", "Party Name", "Address", "City", "State", "Contact Number", "GST", "Date"
         ])
 
-# Save inventory data to CSV
+# Save inventory data
 def save_inventory_data(inventory_df):
     inventory_df.to_csv("inventory.csv", index=False)
 
-# Main app
+# Main App
 def main():
-    # Login screen
     st.title("Login")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
-    
-    # Verify credentials
+
     if st.button("Login"):
         if username in user_credentials and user_credentials[username]["password"] == password:
-            user_role = user_credentials[username]["role"]
-            st.session_state.user_role = user_role  # Store role in session state
-            st.session_state.username = username  # Store username in session state
-            st.success(f"Logged in as {user_role}.")
+            st.session_state.user_role = user_credentials[username]["role"]
+            st.session_state.username = username
+            st.success(f"Logged in as {st.session_state.user_role}.")
         else:
             st.error("Invalid username or password.")
 
-    # If user is logged in, show the inventory system
     if "user_role" in st.session_state:
         role = st.session_state.user_role
         if role == "admin":
-            st.session_state.logged_in = True
             inventory_system()
-        elif role == "viewer" or "rigved":
-            st.session_state.logged_in = True
+        elif role == "viewer":
             viewer_system()
-        else:
-            st.error("Invalid role detected.")
-    
-def inventory_system():
-    # The full inventory system functionality for Admin
-    st.title(":shopping_bags: Inventory Tracker")
-    st.info("Manage your inventory efficiently!")
 
-    # Load product and inventory data
+# Inventory Management (Admin)
+def inventory_system():
+    st.title(":shopping_bags: Inventory Tracker")
     product_data = load_product_data()
     inventory_df = load_inventory_data()
 
-    # Sidebar for adding multiple products (Admin functionality)
     with st.sidebar:
         st.subheader("Add Products")
-        selected_products = st.multiselect(
-            "Select Products",
-            product_data["Product Name"].unique()
-        )
+        selected_products = st.multiselect("Select Products", product_data["Product Name"].unique())
 
         if selected_products:
             product_entries = []
@@ -103,7 +87,6 @@ def inventory_system():
                     "Discount": discount,
                 })
 
-            # Common fields for all products
             st.subheader("Invoice Details")
             action = st.text_input("Action", "Sale")
             bill_no = st.text_input("Bill No.")
@@ -127,83 +110,63 @@ def inventory_system():
                     inventory_df = pd.concat([inventory_df, new_entries_df], ignore_index=True)
                     save_inventory_data(inventory_df)
                     st.success(f"Added {len(product_entries)} product(s) to inventory!")
-                else:
-                    st.warning("No products selected to add.")
 
-    # Display inventory table for Admin
     st.subheader("Inventory Table")
     edited_df = st.data_editor(
         inventory_df,
         num_rows="dynamic",
-        column_config={
-            "Price": st.column_config.NumberColumn(format="$%.2f"),
-            "Discount": st.column_config.NumberColumn(help="Enter discount percentage."),
-        },
+        column_config={"Price": st.column_config.NumberColumn(format="$%.2f")},
         key="inventory_editor",
     )
 
-    # Save changes to inventory
     if st.button("Save Changes"):
         save_inventory_data(edited_df)
         st.success("Inventory updated successfully!")
 
-    # Product-wise sales summary
+    # **Product-wise Sales Summary**
     st.subheader("Product-wise Sales Summary")
-    
-    # Calculate total sales per product
     sales_df = inventory_df.groupby("Product Name").agg(
         Total_Quantity=("Quantity", "sum"),
         Total_Sale_Value=("Price", "sum")
     ).reset_index()
-
-    # Calculate the total sale value (Quantity * Price)
     sales_df["Total_Sale_Value"] = sales_df["Total_Quantity"] * sales_df["Total_Sale_Value"]
-
-    # Display the product-wise sales summary table
     st.write(sales_df)
 
-    # Visualizations
-    st.subheader("Inventory Insights")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("**Total Quantity by Product**")
-        st.bar_chart(edited_df.set_index("Product Name")["Quantity"])
-    with col2:
-        st.write("**Discount Applied by Product**")
-        st.bar_chart(edited_df.set_index("Product Name")["Discount"])
+    # **Date-wise Sales Summary**
+    st.subheader("Date-wise Sales Summary")
+    date_sales_df = inventory_df.groupby("Date").agg(
+        Total_Quantity=("Quantity", "sum"),
+        Total_Sale_Value=("Price", "sum")
+    ).reset_index()
+    date_sales_df["Total_Sale_Value"] = date_sales_df["Total_Quantity"] * date_sales_df["Total_Sale_Value"]
+    st.write(date_sales_df)
 
+    st.subheader("Sales Trends")
+    st.line_chart(date_sales_df.set_index("Date")["Total_Sale_Value"])
+
+# Viewer Dashboard
 def viewer_system():
-    # Viewer can only see the product-wise sales summary and inventory
     st.title(":shopping_bags: Inventory Viewer")
-    st.info("View product-wise sales and inventory details.")
-    
-    # Load product and inventory data
     inventory_df = load_inventory_data()
 
-    # Product-wise sales summary (View only)
     st.subheader("Product-wise Sales Summary")
-    
-    # Calculate total sales per product
     sales_df = inventory_df.groupby("Product Name").agg(
         Total_Quantity=("Quantity", "sum"),
         Total_Sale_Value=("Price", "sum")
     ).reset_index()
-
-    # Calculate the total sale value (Quantity * Price)
     sales_df["Total_Sale_Value"] = sales_df["Total_Quantity"] * sales_df["Total_Sale_Value"]
-
-    # Display the product-wise sales summary table
     st.write(sales_df)
 
-    # Visualizations
-    st.subheader("Inventory Insights")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("**Total Quantity by Product**")
-        st.bar_chart(inventory_df.set_index("Product Name")["Quantity"])
-    with col2:
-        st.write("**Discount Applied by Product**")
-        st.bar_chart(inventory_df.set_index("Product Name")["Discount"])
+    st.subheader("Date-wise Sales Summary")
+    date_sales_df = inventory_df.groupby("Date").agg(
+        Total_Quantity=("Quantity", "sum"),
+        Total_Sale_Value=("Price", "sum")
+    ).reset_index()
+    date_sales_df["Total_Sale_Value"] = date_sales_df["Total_Quantity"] * date_sales_df["Total_Sale_Value"]
+    st.write(date_sales_df)
+
+    st.subheader("Sales Trends")
+    st.line_chart(date_sales_df.set_index("Date")["Total_Sale_Value"])
 
 if __name__ == "__main__":
     main()
