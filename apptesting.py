@@ -110,6 +110,21 @@ def main():
         save_inventory_data(edited_df)
         st.success("Inventory updated successfully!")
 
+    # Product-wise sales summary
+    st.subheader("Product-wise Sales Summary")
+    
+    # Calculate total sales per product
+    sales_df = inventory_df.groupby("Product Name").agg(
+        Total_Quantity=("Quantity", "sum"),
+        Total_Sale_Value=("Price", "sum")
+    ).reset_index()
+
+    # Calculate the total sale value (Quantity * Price)
+    sales_df["Total_Sale_Value"] = sales_df["Total_Quantity"] * sales_df["Total_Sale_Value"]
+
+    # Display the product-wise sales summary table
+    st.write(sales_df)
+
     # Visualizations
     st.subheader("Inventory Insights")
     col1, col2 = st.columns(2)
