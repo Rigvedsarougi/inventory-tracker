@@ -152,7 +152,6 @@ def viewer_system():
     st.subheader("Product-wise Sales Summary")
     sales_df = inventory_df.groupby("Product Name").agg(
         Total_Quantity=("Quantity", "sum"),
-        Total_Sale_Value=("Price", "sum")
     ).reset_index()
     sales_df["Total_Sale_Value"] = sales_df["Total_Quantity"] * sales_df["Total_Sale_Value"]
     st.write(sales_df)
